@@ -1,0 +1,957 @@
+//+------------------------------------------------------------------+
+//|                                                     TD Combo.mq5 |
+//|                               Copyright 2019, Masashi Shimamoto. |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 2019, Masashi Shimamoto"
+#property version   "1.00"
+#property indicator_chart_window
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+
+MqlRates PriceDataTable[];
+int NumberOfPriceDataPoints;
+bool Buy, Sell;
+int objectname;
+int Count;
+int Count2=101;
+int prevcountdown;
+int i;
+int j;
+int l;
+int m;
+int prev2=1;
+input color Colour_for_9_13 = clrRed;
+input color Colour_for_Buy_Setup = clrAqua;
+input color Colour_for_Sell_Setup = clrOrange;
+input color Colour_for_Buy_Countdown = clrGreen;
+input color Colour_for_Sell_Countdown = clrRed;
+input color Colour_for_CurrentBar_Setup = clrWhite;
+input color Colour_for_CurrentBar_Countdown = clrYellow;
+input int Font_Size_for_CurrentBar = 12;
+input int Font_Size_for_Buy_Countdown = 12;
+input int Font_Size_for_Sell_Countdown = 12;
+input int Font_Size_for_9_13 = 15;
+input int Font_Size_for_Buy_Setup = 10;
+input int Font_Size_for_Sell_Setup = 10;
+
+//+-----------------------------------------------------------------------+
+//|This function works only once when this indicator is plotted on a chart|
+//+-----------------------------------------------------------------------+
+int OnInit()
+  {
+      cTDcombo PriceFlip;
+      cTDcombo SetupCount;
+      cTDcombo CountDown;
+      Cbars_countdown Delete;
+      Cbars_countdown count9;        
+      ArraySetAsSeries(PriceDataTable,true);
+      NumberOfPriceDataPoints=CopyRates(_Symbol,0,0,2000,PriceDataTable);
+      
+//+-----------------------------------------------------------------------------------------+
+//|Finding conditions for a first number of a setup (the nearest point from a current price)| 
+//+-----------------------------------------------------------------------------------------+      
+for(i=1; i<=1999; i++)
+{ 
+   //---buy
+   if(PriceDataTable[i].close<PriceDataTable[i+4].close 
+      && PriceDataTable[i+1].close>PriceDataTable[i+4].close)
+      {
+         Buy=1; 
+         Sell=0;      
+         break;
+      } 
+   //---sell    
+   if(PriceDataTable[i].close>PriceDataTable[i+4].close 
+      && PriceDataTable[i+1].close<PriceDataTable[i+4].close)
+      {
+         Sell=1; 
+         Buy=0;
+         break;
+      }           
+}      
+//---send signals for first number of a set up
+//---buy
+if(Buy>0)
+{
+   Count=1;
+   PriceFlip.Buysetup(i);                                         
+}
+//---sell
+if(Sell>0)
+{
+   Count=1;
+   PriceFlip.Sellsetup(i);                                              
+}
+
+//+-----------------------------------------------------------------------------------------+
+//|Finding conditions for cancelling count of set up                                        | 
+//+-----------------------------------------------------------------------------------------+              
+for(j=i-1; j>=1; j--)
+{
+   //---buy
+   if(PriceDataTable[j].close>PriceDataTable[j+4].close 
+      && Buy==1)
+   {        
+        SetupCount.Deleteobjects(100);
+        Buy=0;
+        break;
+   }
+   //---sell
+   if(PriceDataTable[j].close<PriceDataTable[j+4].close 
+      && Sell==1)
+   {      
+        SetupCount.Deleteobjects(100);
+        Sell=0;
+        break;
+   }   
+
+//+-----------------------------------------------------------------------------------------+
+//|Finding conditions for counting for set up                                               | 
+//+-----------------------------------------------------------------------------------------+         
+   //---buy
+   if(PriceDataTable[j].close<PriceDataTable[j+4].close 
+      && Buy==1)
+   {
+      SetupCount.BuySetupCount(j); 
+   } 
+   //---sell
+   if(PriceDataTable[j].close>PriceDataTable[j+4].close 
+      && Sell==1)
+   {
+      SetupCount.SellSetupCount(j); 
+   }   
+
+   if(Count==9)
+      {
+         break;
+      }            
+} 
+
+//+-----------------------------------------------------------------------------------------+
+//|The qualifier of number "9"                                                              | 
+//+-----------------------------------------------------------------------------------------+   
+int k;
+if(Count==9)
+{       
+   for(k = j-1; k >=1; k--)
+   {      
+      //---buy
+      if(PriceDataTable[k].close<PriceDataTable[k+4].close 
+         && PriceDataTable[k].low<PriceDataTable[k+3].low 
+         && Buy==1)
+         {
+            Count2=101;
+            count9.count_bars(1);
+            SetupCount.Number9(k); 
+         }   
+      //---sell
+      if(PriceDataTable[k].close>PriceDataTable[k+4].close 
+         && PriceDataTable[k].high>PriceDataTable[k+3].high 
+         && Sell==1)
+         {
+            Count2=101;
+            count9.count_bars(1);
+            SetupCount.Number9(k); 
+         }
+      
+      if(Count == 10)
+         { 
+            break; 
+         }
+    }
+}
+
+//+-----------------------------------------------------------------------------------------+
+//|Finding conditions for counting for set up since the 9                                   | 
+//+-----------------------------------------------------------------------------------------+                           
+//--- cancelling count of set up
+for(j=k-1; j>=1; j--)
+{
+   //---buy
+   if(PriceDataTable[j].close>PriceDataTable[j+4].close 
+      && Buy==1)
+   {
+      SetupCount.Deleteobjects(100);
+      CountDown.Deleteobjects_countdown(113);
+      Buy=0;
+      //Delete.count_bars(0);
+      break;
+   }
+   //---sell
+   if(PriceDataTable[j].close<PriceDataTable[j+4].close 
+      && Sell==1)
+   {
+      SetupCount.Deleteobjects(100);
+      CountDown.Deleteobjects_countdown(113);
+      Sell=0;
+      //Delete.count_bars(0);
+      break;
+   }  
+    
+   //--- count
+   if(PriceDataTable[j].close<PriceDataTable[j+4].close 
+      && Buy==1)
+   {
+      SetupCount.BuySetupCount(j);  
+   } 
+
+   if(PriceDataTable[j].close>PriceDataTable[j+4].close 
+      && Sell==1)
+   {
+      SetupCount.SellSetupCount(j);  
+   }  
+
+   if(Count>=100)
+   {
+      break;
+   }            
+}                         
+   return(INIT_SUCCEEDED);
+  }
+  
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   cTDcombo SetupCount;
+   cTDcombo CountDown;
+   cTDcombo time;
+   Cbars_countdown Delete;
+   //---when the market is closed
+   if(time.lastdate(1)==5 
+      && time.lasthour(1)==23 
+      && time.lastmin(1)>=54)
+   {
+      ObjectsDeleteAll(0,0,OBJ_TEXT);
+   }else
+   //---when the market is opened
+   SetupCount.Deleteobjects(Count);
+   CountDown.Deleteobjects_countdown(Count2);
+}
+
+//+-----------------------------------------------------------------------+
+//|This function works while the market is opened                         |
+//+-----------------------------------------------------------------------+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])               
+  {
+   cTDcombo PriceFlip;
+   cTDcombo SetupCount;
+   cTDcombo CountDown;
+   Cbars_countdown Delete;
+   Cbars_countdown count9;
+   
+   ArraySetAsSeries(PriceDataTable,true);
+   NumberOfPriceDataPoints=CopyRates(_Symbol,0,0,2000,PriceDataTable);
+
+//+-----------------------------------------------------------------------+
+//|Check for current bar                                                  |
+//+-----------------------------------------------------------------------+ 
+//---Delete for current bar graphic object                                                  
+ObjectDelete(0,0);
+ObjectDelete(0,100);   
+//---sinal for current bar
+CountDown.zerobar(1);  
+
+//+-----------------------------------------------------------------------+
+//|New bar function (works at once when it gets new bar)                  |
+//+-----------------------------------------------------------------------+
+if(SetupCount.isNewBar(_Symbol,PERIOD_CURRENT))
+{
+//---memorize for first bar of setup address
+prevcountdown++;
+
+if(Count>9)
+{prev2++;
+   count9.count_bars2(1);
+}
+
+//+-----------------------------------------------------------------------+
+//|Finding conditions for a first number of a set up                      |
+//+-----------------------------------------------------------------------+
+//---buy
+if(PriceDataTable[1].close<PriceDataTable[5].close 
+   && PriceDataTable[2].close>PriceDataTable[5].close)
+   {
+      SetupCount.Deleteobjects(100);
+      CountDown.Deleteobjects_countdown(113);   
+      Buy=1; 
+      Sell=0;
+      Count=1;   
+      //Delete.count_bars(0);
+      PriceFlip.Buysetup(1);      
+   }else
+//---sell   
+if(PriceDataTable[1].close>PriceDataTable[5].close 
+   && PriceDataTable[2].close<PriceDataTable[5].close)
+   {
+      SetupCount.Deleteobjects(100); 
+      CountDown.Deleteobjects_countdown(113);    
+      Sell=1; 
+      Buy=0;
+      Count=1;
+      //Delete.count_bars(0);
+      PriceFlip.Sellsetup(1);         
+   }else
+
+//+-----------------------------------------------------------------------+
+//|Finding conditions about cancelling for count of set up                |
+//+-----------------------------------------------------------------------+        
+//---buy   
+if(PriceDataTable[1].close>PriceDataTable[5].close 
+   && Buy==1)
+   {
+      SetupCount.Deleteobjects(100);
+      CountDown.Deleteobjects_countdown(113);
+      Buy=0; 
+      //Delete.count_bars(0);  
+   }else
+//--sell
+if(PriceDataTable[1].close<PriceDataTable[5].close 
+   && Sell==1)
+   {
+      SetupCount.Deleteobjects(100);
+      CountDown.Deleteobjects_countdown(113);
+      Sell=0;  
+      //Delete.count_bars(0);  
+   }else
+ 
+//+-----------------------------------------------------------------------+
+//|The qualifier of number "9"                                            |
+//+-----------------------------------------------------------------------+       
+if(Count==9)
+   {
+      //---buy
+      if(PriceDataTable[1].close<PriceDataTable[5].close 
+         && PriceDataTable[1].low<PriceDataTable[4].low 
+         && Buy==1)
+         {
+            Count2=101;
+            count9.count_bars(1);
+            SetupCount.Number9(1);
+         }   
+      //---sell
+      if(PriceDataTable[1].close>PriceDataTable[5].close 
+         && PriceDataTable[1].high>PriceDataTable[4].high 
+         && Sell==1)
+         {
+            Count2=101;
+            count9.count_bars(1);
+            SetupCount.Number9(1);
+         } 
+   }else 
+
+//+-----------------------------------------------------------------------+
+//|Finding conditions for setup count                                      |
+//+-----------------------------------------------------------------------+    
+//---buy
+if(PriceDataTable[1].close<PriceDataTable[5].close 
+   && Buy==1)
+   {
+      SetupCount.BuySetupCount(1);
+   }else
+//---sell
+if(PriceDataTable[1].close>PriceDataTable[5].close 
+   && Sell==1)
+   {
+      SetupCount.SellSetupCount(1);
+   }            
+}     
+   return(rates_total);
+  }
+  
+//+------------------------------------------------------------------+
+class cTDcombo
+   {
+public:
+   void Buysetup(int i);
+   void Sellsetup(int i);
+   void BuySetupCount(int j);
+   void SellSetupCount(int j);
+   void Number9(int k);
+   void Number13(int u);
+   bool isNewBar(string symbol,ENUM_TIMEFRAMES timeframe);
+   void Deleteobjects(int l);
+   void Deleteobjects_countdown(int q); 
+   void buycountdown(int a);
+   void sellcountdown(int b); 
+   void zerobar(int t);  
+   int lastdate(int x);
+   int lasthour(int y);
+   int lastmin(int z);
+   };
+   
+class Cbars_countdown
+   {
+public:
+   void count_bars(int a);
+   void count_bars2(int a);
+   };
+
+//+-----------------------------------------------------------------------+
+//|To get a day of week and time for delete objects when market is closed |
+//+-----------------------------------------------------------------------+ 
+//---day    
+int cTDcombo::lastdate(int x)
+   {
+   MqlDateTime date;
+   TimeCurrent(date);
+   return(date.day_of_week);
+   } 
+//---hour  
+int cTDcombo::lasthour(int y)
+   {
+   MqlDateTime date;
+   TimeCurrent(date);
+   return(date.hour);
+   }    
+//---minute   
+int cTDcombo::lastmin(int z)
+   {
+   MqlDateTime date;
+   TimeCurrent(date);
+   return(date.min);
+   }   
+    
+//+-----------------------------------------------------------------------+
+//|To get new bars                                                        |
+//+-----------------------------------------------------------------------+  
+bool cTDcombo::isNewBar(string symbol,ENUM_TIMEFRAMES timeframe) 
+  {
+      static datetime last_time=0;
+      datetime lastbar_time=SeriesInfoInteger(symbol,timeframe,SERIES_LASTBAR_DATE);
+
+      if(last_time==0)
+        {
+            last_time=lastbar_time;
+            return(false);
+        }
+   
+      if(last_time!=lastbar_time)
+        {
+            last_time=lastbar_time;
+            return(true);
+        }
+         return(false);
+  }      
+
+//+-----------------------------------------------------------------------+
+//|Check conditions for current bar                                       |
+//+-----------------------------------------------------------------------+   
+void cTDcombo::zerobar(int t)
+   {
+      bool currentbar=0;
+      bool currentbar2=0;
+      int Count3;
+      int Count4;
+      datetime TimeAsSeries[];
+      ArraySetAsSeries(TimeAsSeries,true);
+      int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+      
+      //---first count of setup
+      //---buy
+      if(PriceDataTable[0].close<PriceDataTable[4].close 
+         && PriceDataTable[1].close>PriceDataTable[4].close)
+      {
+         currentbar=1;
+         Count3=1;
+      }
+      //---sell
+      if(PriceDataTable[0].close>PriceDataTable[4].close 
+         && PriceDataTable[1].close<PriceDataTable[4].close)
+      {
+         currentbar=1;
+         Count3=1;
+      } 
+      
+      //---count9
+      if(Count==9)
+      {
+         //---buy
+         if(PriceDataTable[0].close<PriceDataTable[4].close 
+            && PriceDataTable[0].low<PriceDataTable[3].low 
+            && Buy==1)
+         {
+            currentbar=1;
+            Count3=9;
+         }   
+         //---sell
+         if(PriceDataTable[0].close>PriceDataTable[4].close 
+            && PriceDataTable[0].high>PriceDataTable[3].high 
+            && Sell==1)
+         {
+            currentbar=1;
+            Count3=9;
+         }
+      }else
+      
+      //---setup count
+      if(Count!=9)
+      {
+         //---buy
+         if(PriceDataTable[0].close<PriceDataTable[4].close 
+            && Buy==1)
+         {        
+            Count3 = Count;
+            currentbar=1;
+         }
+         //---sell
+         if(PriceDataTable[0].close>PriceDataTable[4].close 
+            && Sell==1)
+         {       
+            Count3 = Count; 
+            currentbar=1;
+         }
+      }
+      
+      //---first bar of countdown
+      //---buy
+      if(Count>9 
+         && Buy==1 
+         && PriceDataTable[0].close<=PriceDataTable[2].low 
+         && PriceDataTable[0].low<PriceDataTable[1].low 
+         && PriceDataTable[0].close<PriceDataTable[1].close)
+         {          
+            currentbar2=1;
+            Count4=101;              
+         } 
+      //---sell           
+      if(Count>9 
+         && Sell==1 
+         && PriceDataTable[0].close>=PriceDataTable[2].high 
+         && PriceDataTable[0].high>PriceDataTable[1].high 
+         && PriceDataTable[0].close>PriceDataTable[1].close)
+         {    
+            currentbar2=1;
+            Count4=101;
+         } 
+      
+      //---countdown from 11 to 13
+      if(113>Count2>=110)
+      {
+      //---buy
+      if(Buy==1 
+         && PriceDataTable[0].close<PriceDataTable[prev2].close)
+         {      
+            currentbar2=1;
+            Count4 = Count2-100;                    
+         }
+      //---sell         
+      if(Sell==1 
+         && PriceDataTable[0].close>PriceDataTable[prev2].close)
+         {    
+            currentbar2=1;
+            Count4 = Count2-100;     
+         } 
+       }else
+      
+      //---countdown from 2 to 10
+      //---buy
+      if(Count2>101 
+         && Buy==1 
+         && PriceDataTable[0].close<=PriceDataTable[2].low 
+         && PriceDataTable[0].low<PriceDataTable[1].low 
+         && PriceDataTable[0].close<PriceDataTable[1].close 
+         && PriceDataTable[0].close<PriceDataTable[prev2].close)
+         {      
+            currentbar2=1;
+            Count4 = Count2-100;                    
+         } 
+      //---sell        
+      if(Count2>101 
+         && Sell==1 
+         && PriceDataTable[0].close>=PriceDataTable[2].high 
+         && PriceDataTable[0].high>PriceDataTable[1].high 
+         && PriceDataTable[0].close>PriceDataTable[1].close 
+         && PriceDataTable[0].close>PriceDataTable[prev2].close)
+         {    
+            currentbar2=1;
+            Count4 = Count2-100;   
+         } 
+         
+      //---create graphic objects for setup current bar
+      if(currentbar>0)
+      {
+         ObjectCreate(0,0,OBJ_TEXT,0,TimeAsSeries[0],PriceDataTable[0].low);
+         ObjectSetString(0,0,OBJPROP_TEXT,Count3);                                              
+         ObjectSetString(0,0,OBJPROP_FONT,"ＭＳ　ゴシック");                                
+         ObjectSetInteger(0,0,OBJPROP_FONTSIZE,Font_Size_for_CurrentBar);                                             
+         ObjectSetInteger(0,0,OBJPROP_COLOR,Colour_for_CurrentBar_Setup);
+         
+      }
+      
+      currentbar=0;
+         Count3=0;
+         
+      //---create graphic objects for countdown current bar
+      if(currentbar2>0)
+      {
+         ObjectCreate(0,100,OBJ_TEXT,0,TimeAsSeries[0],PriceDataTable[0].high);
+         ObjectSetString(0,100,OBJPROP_TEXT,Count4);                                              
+         ObjectSetString(0,100,OBJPROP_FONT,"ＭＳ　ゴシック");                                
+         ObjectSetInteger(0,100,OBJPROP_FONTSIZE,Font_Size_for_CurrentBar);                                             
+         ObjectSetInteger(0,100,OBJPROP_COLOR,Colour_for_CurrentBar_Countdown);
+         
+      }
+      
+      currentbar2=0;
+         Count4=0;  
+   };   
+
+//+-----------------------------------------------------------------------+
+//|Check conditions for objects of cowndown after 9                       |
+//+-----------------------------------------------------------------------+   
+void Cbars_countdown::count_bars2(int a)
+{
+   cTDcombo count;
+   ArraySetAsSeries(PriceDataTable,true);
+   NumberOfPriceDataPoints=CopyRates(_Symbol,0,0,2000,PriceDataTable);   
+   
+   //---countdown from 2 to 10
+   if(Count2>=102 
+      && Count2<=110)
+   {
+      //---buy
+      if(Buy==1 
+         && PriceDataTable[1].close<=PriceDataTable[3].low 
+         && PriceDataTable[1].low<PriceDataTable[2].low 
+         && PriceDataTable[1].close<PriceDataTable[2].close 
+         && PriceDataTable[1].close<PriceDataTable[prev2].close)
+         {      
+            prev2=1;     
+            count.buycountdown(1);                       
+         } 
+      //---sell        
+      if(Sell==1 
+         && PriceDataTable[1].close>=PriceDataTable[3].high 
+         && PriceDataTable[1].high>PriceDataTable[2].high 
+         && PriceDataTable[1].close>PriceDataTable[2].close 
+         && PriceDataTable[1].close>PriceDataTable[prev2].close)
+         {     
+            prev2=1;  
+            count.sellcountdown(1);       
+         } 
+   }else
+   
+   //---countdown from 11 to 12
+   if(Count2>=111
+      && Count<=112)
+   {
+      //---buy
+      if(Buy==1 
+         && PriceDataTable[1].close<PriceDataTable[prev2].close)
+         {      
+            prev2=1;    
+            count.buycountdown(1);                       
+         }
+      //---sell         
+      if(Sell==1 
+         && PriceDataTable[1].close>PriceDataTable[prev2].close)
+         {     
+            prev2=1;   
+            count.sellcountdown(1);       
+         } 
+   }
+     //---countdown for 13
+   if(Count2==113)
+   {   
+      //---buy
+      if(Buy==1 
+         && PriceDataTable[1].close<PriceDataTable[prev2].close)
+         {      
+           count.Number13(1);             
+         }
+      //---sell         
+      if(Sell==1 
+         && PriceDataTable[1].close>PriceDataTable[prev2].close)
+         {     
+            count.Number13(1);      
+         } 
+   }
+};
+//+-----------------------------------------------------------------------+
+//|Check conditions for objects of cowndown                               |
+//+-----------------------------------------------------------------------+   
+void Cbars_countdown::count_bars(int a)
+{
+   cTDcombo count;
+   ArraySetAsSeries(PriceDataTable,true);
+   NumberOfPriceDataPoints=CopyRates(_Symbol,0,0,2000,PriceDataTable);   
+   int o;
+   
+   //---first bar of countdown    
+   for(prevcountdown; prevcountdown>=1; prevcountdown--)
+   {
+      //---buy
+      if(Count2==101 
+         && Buy==1 
+         && PriceDataTable[prevcountdown].close<=PriceDataTable[prevcountdown+2].low 
+         && PriceDataTable[prevcountdown].low<PriceDataTable[prevcountdown+1].low 
+         && PriceDataTable[prevcountdown].close<PriceDataTable[prevcountdown+1].close)
+         {        
+            count.buycountdown(prevcountdown);      
+            break;                 
+         } 
+      //---sell           
+      if(Count2==101 
+         && Sell==1 
+         && PriceDataTable[prevcountdown].close>=PriceDataTable[prevcountdown+2].high 
+         && PriceDataTable[prevcountdown].high>PriceDataTable[prevcountdown+1].high 
+         && PriceDataTable[prevcountdown].close>PriceDataTable[prevcountdown+1].close)
+         {   
+            count.sellcountdown(prevcountdown);       
+            break;
+         }     
+   }
+      o=prevcountdown;  
+   //---countdown from 2 to 10
+   for(o; o>=1; o--)
+   {
+      //---buy
+      if(Count2>=102 
+         && Buy==1 
+         && PriceDataTable[o].close<=PriceDataTable[o+2].low 
+         && PriceDataTable[o].low<PriceDataTable[o+1].low 
+         && PriceDataTable[o].close<PriceDataTable[o+1].close 
+         && PriceDataTable[o].close<PriceDataTable[prevcountdown].close)
+         {      
+            prevcountdown=o;     
+            count.buycountdown(o);                       
+         } 
+      //---sell        
+      if(Count2>=102 
+         && Sell==1 
+         && PriceDataTable[o].close>=PriceDataTable[o+2].high 
+         && PriceDataTable[o].high>PriceDataTable[o+1].high 
+         && PriceDataTable[o].close>PriceDataTable[o+1].close 
+         && PriceDataTable[o].close>PriceDataTable[prevcountdown].close)
+         {    
+            prevcountdown=o;    
+            count.sellcountdown(o);       
+         } 
+         
+      if(Count2>110)
+      {
+         break;
+      } 
+   } 
+   
+   //---countdown from 11 to 13
+   for(int p=prevcountdown; p>=1; p--)
+   {
+      //---buy
+      if(Count2>110 
+         && Buy==1 
+         && PriceDataTable[p].close<PriceDataTable[prevcountdown].close)
+         {      
+            prevcountdown=p;     
+            count.buycountdown(p);                       
+         }
+      //---sell         
+      if(Count2>110 
+         && Sell==1 
+         && PriceDataTable[p].close>PriceDataTable[prevcountdown].close)
+         {    
+            prevcountdown=p;    
+            count.sellcountdown(p);       
+         } 
+      
+      if(Count2==113)
+      {
+         count.Number13(p);
+      }    
+         
+      if(Count2>113)
+      {
+         break;
+      }    
+   }  
+};   
+   
+//+-----------------------------------------------------------------------+
+//|Graphic objects for countdown                                          |
+//+-----------------------------------------------------------------------+      
+//--- for buy countdown  
+void cTDcombo::buycountdown(int a)
+   {
+      datetime TimeAsSeries[];
+      ArraySetAsSeries(TimeAsSeries,true);
+      int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+ 
+      ObjectCreate(0,Count2,OBJ_TEXT,0,TimeAsSeries[a],PriceDataTable[a].high);
+      ObjectSetString(0,Count2,OBJPROP_TEXT,Count2-100);                                              
+      ObjectSetString(0,Count2,OBJPROP_FONT,"ＭＳ　ゴシック");                                
+      ObjectSetInteger(0,Count2,OBJPROP_FONTSIZE,Font_Size_for_Buy_Countdown);                                             
+      ObjectSetInteger(0,Count2,OBJPROP_COLOR,Colour_for_Buy_Countdown);
+      
+      Count2++;    
+   };
+//--- for sell countdown
+void cTDcombo::sellcountdown(int b)
+   {
+      datetime TimeAsSeries[];
+      ArraySetAsSeries(TimeAsSeries,true);
+      int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+
+      ObjectCreate(0,Count2,OBJ_TEXT,0,TimeAsSeries[b],PriceDataTable[b].high);
+      ObjectSetString(0,Count2,OBJPROP_TEXT,Count2-100);                                              
+      ObjectSetString(0,Count2,OBJPROP_FONT,"ＭＳ　ゴシック");                                 
+      ObjectSetInteger(0,Count2,OBJPROP_FONTSIZE,Font_Size_for_Sell_Countdown);                                             
+      ObjectSetInteger(0,Count2,OBJPROP_COLOR,Colour_for_Sell_Countdown);
+      
+      Count2++;  
+   };   
+
+//+-----------------------------------------------------------------------+
+//|Delete graphic objects function                                        |
+//+-----------------------------------------------------------------------+ 
+//---for setup 
+void cTDcombo::Deleteobjects(int l)
+{
+   for(l; l>=0; l--)
+     {
+      ObjectDelete(0,l);    
+     }
+   Count=0;
+};
+//---for cowndown
+void cTDcombo::Deleteobjects_countdown(int q)
+{
+   for(q; q>=100; q--)
+     {
+      ObjectDelete(0,q);             
+     }
+   Count2=101;
+};
+   
+//+-----------------------------------------------------------------------+
+//|Graphic objects of 9                                                   |
+//+-----------------------------------------------------------------------+
+void cTDcombo::Number9(int k)
+   {
+      datetime TimeAsSeries[];
+      ArraySetAsSeries(TimeAsSeries,true);  
+      int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+       
+      ObjectCreate(0,Count,OBJ_TEXT,0,TimeAsSeries[k],PriceDataTable[k].low);
+      ObjectSetString(0,Count,OBJPROP_TEXT,Count);                                              
+      ObjectSetString(0,Count,OBJPROP_FONT,"ＭＳ　ゴシック");                                          
+      ObjectSetInteger(0,Count,OBJPROP_FONTSIZE,Font_Size_for_9_13);                                             
+      ObjectSetInteger(0,Count,OBJPROP_COLOR,Colour_for_9_13);
+      
+      Count=10;        
+   }; 
+   
+//+-----------------------------------------------------------------------+
+//|Graphic objects of 13                                                  |
+//+-----------------------------------------------------------------------+ 
+void cTDcombo::Number13(int u)
+{   
+   Cbars_countdown signal_countdown;
+   datetime TimeAsSeries[];
+   ArraySetAsSeries(TimeAsSeries,true);
+   int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+   
+   ObjectCreate(0,113,OBJ_TEXT,0,TimeAsSeries[u],PriceDataTable[u].high);
+   ObjectSetString(0,113,OBJPROP_TEXT,13);                                              
+   ObjectSetString(0,113,OBJPROP_FONT,"ＭＳ　ゴシック");                                
+   ObjectSetInteger(0,113,OBJPROP_FONTSIZE,Font_Size_for_9_13);                                             
+   ObjectSetInteger(0,113,OBJPROP_COLOR,Colour_for_9_13);
+   
+   signal_countdown.count_bars(0);
+   Count2=101; 
+};       
+//+-----------------------------------------------------------------------+
+//|Graphic objects for a first number of setup                            |
+//+-----------------------------------------------------------------------+
+//--- for buy  
+void cTDcombo::Buysetup(int i)
+   {
+      Cbars_countdown bars_buy;
+      datetime TimeAsSeries[];
+      ArraySetAsSeries(TimeAsSeries,true);
+      int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+
+      if(i>0)
+      { 
+         ObjectCreate(0,Count,OBJ_TEXT,0,TimeAsSeries[i],PriceDataTable[i].low);
+         ObjectSetString(0,Count,OBJPROP_TEXT,Count);                                              
+         ObjectSetString(0,Count,OBJPROP_FONT,"ＭＳ　ゴシック");                                
+         ObjectSetInteger(0,Count,OBJPROP_FONTSIZE,Font_Size_for_Buy_Setup);                                             
+         ObjectSetInteger(0,Count,OBJPROP_COLOR,Colour_for_Buy_Setup);
+         
+         prevcountdown=i; 
+        
+         Count=2;
+      }   
+   };
+//--- for sell
+void cTDcombo::Sellsetup(int i)
+   {
+      Cbars_countdown bars_sell;
+      datetime TimeAsSeries[];
+      ArraySetAsSeries(TimeAsSeries,true);
+      int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+      
+      if(i>0)
+      { 
+         ObjectCreate(0,Count,OBJ_TEXT,0,TimeAsSeries[i],PriceDataTable[i].low);
+         ObjectSetString(0,Count,OBJPROP_TEXT,Count);                                              
+         ObjectSetString(0,Count,OBJPROP_FONT,"ＭＳ　ゴシック");                                 
+         ObjectSetInteger(0,Count,OBJPROP_FONTSIZE,Font_Size_for_Sell_Setup);                                             
+         ObjectSetInteger(0,Count,OBJPROP_COLOR,Colour_for_Sell_Setup);
+         
+         prevcountdown=i;
+         
+         Count=2;
+       }  
+   };
+   
+//+-----------------------------------------------------------------------+
+//|Graphic objects of setup count                                         |
+//+-----------------------------------------------------------------------+
+//--- for buy  
+void cTDcombo::BuySetupCount(int j)
+   {
+      datetime TimeAsSeries[];
+      ArraySetAsSeries(TimeAsSeries,true);
+      int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+      
+      if(Count!=9)
+      {
+         ObjectCreate(0,Count,OBJ_TEXT,0,TimeAsSeries[j],PriceDataTable[j].low);
+         ObjectSetString(0,Count,OBJPROP_TEXT,Count);                                              
+         ObjectSetString(0,Count,OBJPROP_FONT,"ＭＳ　ゴシック");                  
+         ObjectSetInteger(0,Count,OBJPROP_FONTSIZE,Font_Size_for_Buy_Setup);                                             
+         ObjectSetInteger(0,Count,OBJPROP_COLOR,Colour_for_Buy_Setup);
+         
+         Count++;
+      }         
+   };  
+//--- for sell   
+void cTDcombo::SellSetupCount(int j)
+   {
+      datetime TimeAsSeries[];
+      ArraySetAsSeries(TimeAsSeries,true);  
+      int Time=CopyTime(NULL,0,0,2000,TimeAsSeries);
+      
+      if(Count!=9)
+      {         
+         ObjectCreate(0,Count,OBJ_TEXT,0,TimeAsSeries[j],PriceDataTable[j].low);
+         ObjectSetString(0,Count,OBJPROP_TEXT,Count);                                              
+         ObjectSetString(0,Count,OBJPROP_FONT,"ＭＳ　ゴシック");                                             
+         ObjectSetInteger(0,Count,OBJPROP_FONTSIZE,Font_Size_for_Sell_Setup);                                             
+         ObjectSetInteger(0,Count,OBJPROP_COLOR,Colour_for_Sell_Setup);
+         
+         Count++;
+      }
+   };    

@@ -1,0 +1,398 @@
+//+------------------------------------------------------------------+
+//|                                  Trend Checker Linear Regression |
+//|                                TrendChecker_LinearRegression.mq4 |
+//|                                Copyright 2024, Shimamoto Masashi |
+//|                                                                  |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 2024, Shimamoto Masashi"
+#property link      ""
+#property version   "1.00"
+#property strict
+#property indicator_chart_window
+//--- internal parameters
+bool prevCalculated;
+int  chart_id = 0;
+string   obj_name;
+color    colour;
+string signalGlobal;
+bool boolRun = false;
+//---input parameters
+//---notification
+input bool boolNotification = false; //Notification
+//---alert
+input bool boolAlert = false; //Alert
+//---regression period
+input int  period_CurrentTimeframe=40; //Period
+//---Trend determination angle
+input int  angle_CurrentTimeframe=10; //Angle
+//---obj colour
+input color clrBull = clrDarkGreen; //Colour of Bull
+input color clrBear = clrMaroon; //Colour of Bear
+input color clrSideways = clrDimGray; //Colour of Sideways
+//---obj back colour filling
+input bool objBackColourFill = true; //Object background clour filling
+//---obj width
+enum objWidth_enum
+  {
+   Width_1 = 1,   //1
+   Width_2,       //2
+   Width_3,       //3
+   Width_4,       //4
+   Width_5        //5
+  };
+input objWidth_enum objWidth = Width_1; //Object line width
+//---obj line style
+enum objLineStyle_enum
+  {
+   SOLID = STYLE_SOLID,   //STYLE_SOLID
+   DASHDOT,       //STYLE_DASHDOT
+   DASHDOTDOT,       //STYLE_DASHDOTDOT
+   DOT       //STYLE_DOT
+  };
+input objLineStyle_enum objLineStyle = STYLE_SOLID; //Object line style
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+
+int OnInit()
+  {
+//--- initialising
+   prevCalculated = true;
+   obj_name = string(period_CurrentTimeframe+angle_CurrentTimeframe+rand());
+
+   if(period_CurrentTimeframe>WindowBarsPerChart())
+     {
+      Alert("Please reduce the screen size or shorten the Period parameter."+period_CurrentTimeframe);
+     }
+   else
+     {
+      boolRun = true;
+     }
+//---
+   return(INIT_SUCCEEDED);
+  }
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+  {
+//---
+   ObjectDelete(chart_id, obj_name);
+  }
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+  {
+   if(boolRun)
+     {
+      //---
+      int limit = rates_total - prev_calculated;
+
+      //---activate when plot
+      if(limit == 0 && prevCalculated == true)
+        {
+         run();
+         prevCalculated = false;
+        }
+
+      //---activate when new bar is generated
+      if(limit==1)
+        {
+         run();
+        }
+     }
+//--- return value of prev_calculated for next call
+   return(rates_total);
+  }
+
+//+-----------------------------------------------------------------+
+//| run                                             |
+//+------------------------------------------------------------------+
+void run()
+  {
+   int x_start, x_end;
+   double y_start, y_end,obj_angle;
+   string direction,signal;
+
+//---get regression
+   getRegression(period_CurrentTimeframe,period_CurrentTimeframe,x_start, y_start, x_end, y_end,PERIOD_CURRENT);
+
+//---get angle
+   getAngle(obj_angle,x_start, y_start, x_end, y_end);
+
+//---get direction
+   getDirection(y_start,y_end,direction);
+
+//---get signal
+   getSignal(obj_angle,direction,signal);
+
+//---create lines
+   createLine(x_end, y_end,x_start,y_start,ATR(period_CurrentTimeframe));
+
+//---send signal
+   if(prevCalculated == false)
+     {
+      sendSignal(signal);
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| get regression                                             |
+//+------------------------------------------------------------------+
+void getRegression(int bars,int period,int &x_start,double &y_start,int &x_end,double &y_end,ENUM_TIMEFRAMES timeFrame)
+  {
+//---initialise
+   double standardDeviation_X,standardDeviation_Y,aveX,aveY,Covariance,sumX=0,sumY=0,sumSquareOfDeviation_X=0,sumSquareOfDeviation_Y=0,sumDeviationProduct=0,correlationCoefficient,Tilt,segment;
+   double arrY[],arrSquareOfDeviation_X_Y[,2],arrDeviationProduct[];
+   int arrX[];
+   int x,y,i,loopIndex;
+
+   ArrayResize(arrY,period);
+   ArrayResize(arrX,period);
+   ArrayResize(arrSquareOfDeviation_X_Y,period);
+   ArrayResize(arrDeviationProduct,period);
+
+   ArrayInitialize(arrX,0);
+   ArrayInitialize(arrY,0);
+   ArrayInitialize(arrSquareOfDeviation_X_Y,0);
+   ArrayInitialize(arrDeviationProduct,0);
+
+   loopIndex=period-1;
+
+//---get bars x y
+   for(i = bars; i >= bars-period+1; i--)
+     {
+      ChartTimePriceToXY(chart_id,0,iTime(Symbol(), timeFrame, i),iClose(Symbol(), timeFrame, i),x,y);
+      arrX[loopIndex] = x;
+      arrY[loopIndex] = y;
+
+      //---sum of X and Y
+      sumX=sumX+arrX[loopIndex];
+      sumY=sumY+arrY[loopIndex];
+
+      loopIndex=loopIndex-1;
+     }
+
+//--average of X and Y
+   aveX=sumX/period;
+   aveY=sumY/period;
+
+   for(int k = period; k >= 1; k--)
+     {
+      //---get X and Y Square of deviation
+      arrSquareOfDeviation_X_Y[k-1,0] = MathPow(aveX-arrX[k-1],2);
+      arrSquareOfDeviation_X_Y[k-1,1] = MathPow(aveY-arrY[k-1],2);
+      //---get sum of Square of deviation
+      sumSquareOfDeviation_X = sumSquareOfDeviation_X + arrSquareOfDeviation_X_Y[k-1,0];
+      sumSquareOfDeviation_Y = sumSquareOfDeviation_Y + arrSquareOfDeviation_X_Y[k-1,1];
+      //---get Deviation product
+      arrDeviationProduct[k-1] = (arrX[k-1]-aveX)*(arrY[k-1]-aveY);
+      //---get sum of Deviation product
+      sumDeviationProduct=sumDeviationProduct+arrDeviationProduct[k-1];
+     }
+
+//---get Standard Deviation
+   standardDeviation_X = sqrt(sumSquareOfDeviation_X/period);
+   standardDeviation_Y = sqrt(sumSquareOfDeviation_Y/period);
+//--- get Covariance
+   Covariance= sumDeviationProduct/period;
+//---get Correlation Coefficient
+   correlationCoefficient=Covariance/(standardDeviation_X*standardDeviation_Y);
+//--- get Tilt
+   Tilt=correlationCoefficient*standardDeviation_Y/standardDeviation_X;
+//---get segment
+   segment=aveY-Tilt*aveX;
+
+//---get x_start
+   x_start=arrX[period-1];
+//---get x_end
+   x_end=arrX[0];
+//---get y_start
+   y_start=Tilt*x_start+segment;
+//---get y_end
+   y_end=Tilt*x_end+segment;
+
+   ArrayFree(arrX);
+   ArrayFree(arrY);
+   ArrayFree(arrSquareOfDeviation_X_Y);
+   ArrayFree(arrDeviationProduct);
+
+  }
+//+------------------------------------------------------------------+
+//| get angle                                           |
+//+------------------------------------------------------------------+
+void getAngle(double &obj_angle,int x_left,int y_left,int x_right,int y_right)
+  {
+   double bottom,height;
+   double tangent,radian;
+
+   bottom=MathAbs(x_right-x_left);
+   height=MathAbs(y_left-y_right);
+//---get tangent
+   tangent=height/bottom;
+//---get radian
+   radian=MathArctan(tangent);
+//get angle
+   obj_angle=radian*180/M_PI;
+  }
+//+------------------------------------------------------------------+
+//| get direction                                          |
+//+------------------------------------------------------------------+
+void getDirection(int y_left,int y_right,string &direction)
+  {
+   if(y_left>y_right)
+     {
+      direction="up";
+     }
+   else
+      if(y_left<y_right)
+        {
+         direction="down";
+        }
+      else
+        {
+         direction="";
+        }
+  }
+//+------------------------------------------------------------------+
+//| get signal                                          |
+//+------------------------------------------------------------------+
+void getSignal(double obj_angle,string direction,string &signal)
+  {
+   if(obj_angle>=angle_CurrentTimeframe && direction=="up")
+     {
+      signal="BULL";
+      colour = clrBull;
+     }
+   else
+      if(obj_angle>=angle_CurrentTimeframe && direction=="down")
+        {
+         signal="BEAR";
+         colour = clrBear;
+        }
+      else
+        {
+         signal="SIDEWAYS";
+         colour = clrSideways;
+        }
+  }
+//+-----------------------------------------------------------------+
+//| ATR                                            |
+//+------------------------------------------------------------------+
+double ATR(int period)
+  {
+   double TR[],highest[],prevClose[],lowest[];
+   double price1,price2,price3;
+   double TRsum;
+
+   ArrayResize(TR,period);
+   ArrayResize(highest,period);
+   ArrayResize(prevClose,period);
+   ArrayResize(lowest,period);
+
+   ArrayInitialize(TR,0);
+   ArrayInitialize(highest,0);
+   ArrayInitialize(prevClose,0);
+   ArrayInitialize(lowest,0);
+
+   for(int i=0; i<period; i++)
+     {
+      highest[i] = High[i+1];
+      prevClose[i] = Close[i+2];
+      lowest[i] = Low[i+1];
+
+      //highest－prevClose
+      price1 = MathAbs(prevClose[i] - lowest[i]);
+      //highest－lowest
+      price2 = MathAbs(highest[i] - lowest[i]);
+      //prevClose－lowest
+      price3 = MathAbs(prevClose[i] - lowest[i]);
+      //max of prices
+      TR[i] = MathMax(MathMax(price1,price2),price3);
+      TRsum += TR[i];
+     }
+
+   ArrayFree(TR);
+   ArrayFree(highest);
+   ArrayFree(prevClose);
+   ArrayFree(lowest);
+
+   return TRsum/period;
+  }
+//+-----------------------------------------------------------------+
+//| create line                                             |
+//+------------------------------------------------------------------+
+void createLine(int x_end,double y_end,int x_start,double y_start,double ATR)
+  {
+   int      window_no;
+   datetime get_time_start,get_time_end;
+   double get_price_start,get_price_end;
+
+   ObjectDelete(chart_id, obj_name);
+
+   ChartXYToTimePrice(chart_id,x_start,y_start,window_no,get_time_start,get_price_start);
+   ChartXYToTimePrice(chart_id,x_end,y_end,window_no,get_time_end,get_price_end);
+
+   ObjectCreate(chart_id,obj_name,
+                OBJ_CHANNEL,
+                0,
+                get_time_start,
+                get_price_start-ATR,
+                get_time_end,
+                get_price_end-ATR,
+                get_time_start,
+                get_price_start+(ATR*2)
+               );
+
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_COLOR,colour);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_STYLE,objLineStyle);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_WIDTH,objWidth);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_BACK,true);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_SELECTABLE,false);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_SELECTED,false);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_HIDDEN,true);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_ZORDER,0);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_RAY_RIGHT,false);
+   ObjectSetInteger(chart_id,obj_name,OBJPROP_FILL,objBackColourFill);
+  }
+//+-----------------------------------------------------------------+
+//| send signal                                             |
+//+------------------------------------------------------------------+
+void sendSignal(string signal)
+  {
+   if(signalGlobal != signal)
+     {
+      string msg = "["+signal+"][Period:"+ period_CurrentTimeframe +"]["+Symbol()+"][Chart Time(min):"+Period()+"] The trend has changed";
+
+      if(boolNotification)
+        {
+         bool resultNotification = SendNotification(msg);
+
+         if(!resultNotification)
+           {
+            Print("Push notifications failed");
+           }
+        }
+
+      if(boolAlert)
+        {
+         Alert(msg);
+        }
+
+      signalGlobal = signal;
+     }
+  }
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
