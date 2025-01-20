@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
-//|                                  Trend Checker Linear Regression |
-//|                                TrendChecker_LinearRegression.mq4 |
+//|                                  Linear Regression |
+//|                                LinearRegression.mq4 |
 //|                                Copyright 2024, Shimamoto Masashi |
 //|                                                                  |
 //+------------------------------------------------------------------+
